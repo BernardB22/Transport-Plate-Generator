@@ -1,0 +1,107 @@
+import random
+import re
+import cv2
+import pytesseract
+
+# Ruta de Tesseract (ajusta si es necesario)
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+# Expresiones regulares para validar
+formatos_placas = {
+    "particular": r"[A-Z]{3}-\d{3}-[A-Z]{1}",  # ABC-123-A
+    "antiguo": r"[A-Z]{3}-\d{3}",             # ABC-123
+    "motocicleta": r"\d{2}[A-Z]{3}\d{1}",     # 12ABC3
+    "federal": r"\d{3}-[A-Z]{3}-\d{1}"        # 123-ABC-4
+}
+
+def generar_placa(tipo):
+    if tipo == "particular":
+        return f"{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}-{random.randint(100,999)}-{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}"
+    elif tipo == "antiguo":
+        return f"{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}-{random.randint(100,999)}"
+    elif tipo == "motocicleta":
+        return f"{random.randint(10,99)}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.randint(0,9)}"
+    elif tipo == "federal":
+        return f"{random.randint(100,999)}-{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}-{random.randint(0,9)}"
+    return None
+
+def validar_placa(placa, tipo=None):
+    if tipo:
+        return re.fullmatch(formatos_placas[tipo], placa) is not None
+    else:
+        for t, pattern in formatos_placas.items():
+            if re.fullmatch(pattern, placa):
+                return t
+    return None
+
+def escribir_placa_en_imagen(imagen_path, texto_placa, salida_path="placa_con_texto.jpg"):
+    imagen = cv2.imread(imagen_path)
+    posicion_texto = (70, 155)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    tamaño_fuente = 2
+    color = (0, 0, 0)
+    grosor = 4
+    cv2.putText(imagen, texto_placa, posicion_texto, font, tamaño_fuente, color, grosor, cv2.LINE_AA)
+    cv2.imwrite(salida_path, imagen)
+    cv2.imshow("Placa con Texto", imagen)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    print(f"Imagen guardada con la placa: {texto_placa} en {salida_path}")
+
+def escanear_matricula_con_camara():
+    print("🎥 Iniciando escaneo. Presiona 'S' para escanear o 'Q' para salir.")
+    cap = cv2.VideoCapture(0)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        x, y, w, h = 200, 150, 300, 80
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        roi = frame[y:y + h, x:x + w]
+        cv2.imshow("Presiona 'S' para escanear", frame)
+        tecla = cv2.waitKey(2) & 0xFF
+        if tecla == ord('q'):
+            break
+        elif tecla == ord('s'):
+            gris = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            _, binaria = cv2.threshold(gris, 150, 255, cv2.THRESH_BINARY)
+            texto = pytesseract.image_to_string(binaria).strip().upper().replace(" ", "").replace("\n", "")
+            print(f"Texto detectado: {texto}")
+            tipo = validar_placa(texto)
+            if tipo:
+                print(f"Matrícula válida de tipo: {tipo}")
+            else:
+                print("No se detectó una matrícula válida.")
+    cap.release()
+    cv2.destroyAllWindows()
+
+# ---------------------- MENÚ PRINCIPAL ----------------------
+print("🚗 Menú de opciones:")
+print("1. Generar matrícula particular")
+print("2. Generar matrícula antiguo")
+print("3. Generar matrícula motocicleta")
+print("4. Generar matrícula federal")
+print("5. Escanear matrícula con cámara")
+
+opcion = input("Selecciona una opción (1-5): ")
+
+tipos = {
+    "1": "particular",
+    "2": "antiguo",
+    "3": "motocicleta",
+    "4": "federal"
+}
+
+if opcion in tipos:
+    tipo_vehiculo = tipos[opcion]
+    placa_generada = generar_placa(tipo_vehiculo)
+    if validar_placa(placa_generada, tipo_vehiculo):
+        print(f"Tu nueva matrícula generada es: {placa_generada}")
+        imagen_placa = r"C:\Users\DELL\Desktop\Escritorio\paquet tracer\FIRMAIMPORTANTE\placaL.png"
+        escribir_placa_en_imagen(imagen_placa, placa_generada)
+    else:
+        print("Hubo un error generando la placa.")
+elif opcion == "5":
+    escanear_matricula_con_camara()
+else:
+    print("Opción inválida.")
